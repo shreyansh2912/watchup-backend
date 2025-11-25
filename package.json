@@ -11,18 +11,27 @@
     "dev": "nodemon server.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
+    "db:push": "drizzle-kit push:pg",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "drizzle-orm": "^0.30.0",
+    "drizzle-orm": "^0.29.5",
     "express": "^4.18.3",
-    "pg": "^8.11.3"
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
+    "passport": "^0.7.0",
+    "passport-facebook": "^3.0.0",
+    "passport-google-oauth20": "^2.0.0",
+    "pg": "^8.16.3",
+    "sequelize": "^6.37.7"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.20.14",
+    "@types/pg": "^8.15.6",
+    "drizzle-kit": "^0.20.18",
     "nodemon": "^3.1.0"
   }
 }
