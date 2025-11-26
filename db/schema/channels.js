@@ -3,7 +3,7 @@ import { users } from './users.js';
 
 export const channels = pgTable('channels', {
     id: serial('id').primaryKey(),
-    userId: integer('user_id').references(() => users.id).notNull().unique(),
+    userId: integer('user_id').references(() => users.id).notNull(),
     name: text('name').notNull(),
     handle: text('handle').notNull().unique(),
     description: text('description'),

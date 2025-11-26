@@ -1,12 +1,16 @@
 import { db } from '../db/index.js';
-import { playlists, playlistVideos, videos } from '../db/schema/index.js';
+import { playlists, playlistVideos, videos, channels } from '../db/schema/index.js';
 import { eq, and, desc } from 'drizzle-orm';
 import { successResponse, errorResponse } from '../utils/responseHandler.js';
 
 export const createPlaylist = async (req, res) => {
     try {
         const { name, description, isPrivate } = req.body;
-        const userId = req.user.id;
+
+        if (!req.channel) {
+            return errorResponse(res, 400, "Channel context required");
+        }
+        const channelId = req.channel.id;
 
         if (!name) {
             return errorResponse(res, 400, "Playlist name is required");
@@ -16,7 +20,7 @@ export const createPlaylist = async (req, res) => {
             name,
             description,
             isPrivate: isPrivate || false,
-            userId
+            channelId
         }).returning();
 
         return successResponse(res, 201, "Playlist created", newPlaylist);
@@ -28,10 +32,13 @@ export const createPlaylist = async (req, res) => {
 
 export const getUserPlaylists = async (req, res) => {
     try {
-        const userId = req.user.id;
+        if (!req.channel) {
+            return errorResponse(res, 400, "Channel context required");
+        }
+        const channelId = req.channel.id;
 
         const userPlaylists = await db.query.playlists.findMany({
-            where: eq(playlists.userId, userId),
+            where: eq(playlists.channelId, channelId),
             orderBy: [desc(playlists.createdAt)]
         });
 
@@ -45,16 +52,17 @@ export const getUserPlaylists = async (req, res) => {
 export const getPlaylistById = async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = req.user ? req.user.id : null;
+        const channelId = req.channel ? req.channel.id : null;
 
         const playlist = await db.query.playlists.findFirst({
             where: eq(playlists.id, parseInt(id)),
             with: {
-                user: {
+                channel: {
                     columns: {
                         id: true,
-                        username: true,
-                        avatar: true
+                        name: true,
+                        handle: true,
+                        avatarUrl: true
                     }
                 }
             }
@@ -65,7 +73,7 @@ export const getPlaylistById = async (req, res) => {
         }
 
         // Check privacy
-        if (playlist.isPrivate && playlist.userId !== userId) {
+        if (playlist.isPrivate && playlist.channelId !== channelId) {
             return errorResponse(res, 403, "This playlist is private");
         }
 
@@ -99,7 +107,11 @@ export const addVideoToPlaylist = async (req, res) => {
     try {
         const { id } = req.params; // Playlist ID
         const { videoId } = req.body;
-        const userId = req.user.id;
+
+        if (!req.channel) {
+            return errorResponse(res, 400, "Channel context required");
+        }
+        const channelId = req.channel.id;
 
         const playlist = await db.query.playlists.findFirst({
             where: eq(playlists.id, parseInt(id))
@@ -109,7 +121,7 @@ export const addVideoToPlaylist = async (req, res) => {
             return errorResponse(res, 404, "Playlist not found");
         }
 
-        if (playlist.userId !== userId) {
+        if (playlist.channelId !== channelId) {
             return errorResponse(res, 403, "Not authorized to modify this playlist");
         }
 
@@ -141,7 +153,11 @@ export const addVideoToPlaylist = async (req, res) => {
 export const removeVideoFromPlaylist = async (req, res) => {
     try {
         const { id, videoId } = req.params; // Playlist ID, Video ID
-        const userId = req.user.id;
+
+        if (!req.channel) {
+            return errorResponse(res, 400, "Channel context required");
+        }
+        const channelId = req.channel.id;
 
         const playlist = await db.query.playlists.findFirst({
             where: eq(playlists.id, parseInt(id))
@@ -151,7 +167,7 @@ export const removeVideoFromPlaylist = async (req, res) => {
             return errorResponse(res, 404, "Playlist not found");
         }
 
-        if (playlist.userId !== userId) {
+        if (playlist.channelId !== channelId) {
             return errorResponse(res, 403, "Not authorized to modify this playlist");
         }
 
@@ -173,7 +189,11 @@ export const removeVideoFromPlaylist = async (req, res) => {
 export const deletePlaylist = async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = req.user.id;
+
+        if (!req.channel) {
+            return errorResponse(res, 400, "Channel context required");
+        }
+        const channelId = req.channel.id;
 
         const playlist = await db.query.playlists.findFirst({
             where: eq(playlists.id, parseInt(id))
@@ -183,7 +203,7 @@ export const deletePlaylist = async (req, res) => {
             return errorResponse(res, 404, "Playlist not found");
         }
 
-        if (playlist.userId !== userId) {
+        if (playlist.channelId !== channelId) {
             return errorResponse(res, 403, "Not authorized to delete this playlist");
         }
 

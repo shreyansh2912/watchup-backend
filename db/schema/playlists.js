@@ -1,12 +1,12 @@
 import { pgTable, serial, text, integer, timestamp, boolean, primaryKey } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
+import { channels } from './channels.js';
 import { videos } from './videos.js';
 
 export const playlists = pgTable('playlists', {
     id: serial('id').primaryKey(),
     name: text('name').notNull(),
     description: text('description'),
-    userId: integer('user_id').references(() => users.id).notNull(),
+    channelId: integer('channel_id').references(() => channels.id).notNull(),
     isPrivate: boolean('is_private').default(false),
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),

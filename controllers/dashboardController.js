@@ -5,14 +5,7 @@ import { successResponse, errorResponse } from '../utils/responseHandler.js';
 
 export const getChannelStats = async (req, res) => {
     try {
-        const userId = req.user.id;
-
-        // Get user's channel
-        const [channel] = await db.select().from(channels).where(eq(channels.userId, userId)).limit(1);
-
-        if (!channel) {
-            return errorResponse(res, 404, "Channel not found");
-        }
+        const channelId = req.channel.id;
 
         // 1. Total Videos & Total Views
         const [videoStats] = await db
@@ -21,25 +14,22 @@ export const getChannelStats = async (req, res) => {
                 totalViews: sql`sum(${videos.views})`
             })
             .from(videos)
-            .where(eq(videos.channelId, channel.id));
+            .where(eq(videos.channelId, channelId));
 
         // 2. Total Subscribers
-        // We can use the pre-calculated field in channel table or count from subscribers table.
-        // Using the table count is more accurate if the field isn't perfectly synced.
         const [subStats] = await db
             .select({ count: sql`count(*)` })
             .from(subscriptions)
-            .where(eq(subscriptions.channelId, channel.id));
+            .where(eq(subscriptions.channelId, channelId));
 
         // 3. Total Likes
-        // Join likes with videos to filter by channel
         const [likeStats] = await db
             .select({ count: sql`count(*)` })
             .from(likes)
             .innerJoin(videos, eq(likes.videoId, videos.id))
             .where(and(
-                eq(videos.channelId, channel.id),
-                eq(likes.type, 'like')
+                eq(videos.channelId, channelId),
+                eq(likes.type, 'LIKE')
             ));
 
         const stats = {
@@ -59,18 +49,10 @@ export const getChannelStats = async (req, res) => {
 
 export const getChannelVideos = async (req, res) => {
     try {
-        const userId = req.user.id;
+        const channelId = req.channel.id;
 
-        const [channel] = await db.select().from(channels).where(eq(channels.userId, userId)).limit(1);
-
-        if (!channel) {
-            return errorResponse(res, 404, "Channel not found");
-        }
-
-        // Get videos with like/comment counts (optional, but good for dashboard)
-        // For now, just basic video info + views + date
         const channelVideos = await db.query.videos.findMany({
-            where: eq(videos.channelId, channel.id),
+            where: eq(videos.channelId, channelId),
             orderBy: [desc(videos.createdAt)]
         });
 

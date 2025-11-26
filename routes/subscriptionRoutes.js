@@ -1,5 +1,5 @@
 import express from 'express';
-import { toggleSubscription, getSubscriptionStatus } from '../controllers/subscriptionController.js';
+import { toggleSubscription, getSubscriptionStatus, getSubscribedChannels } from '../controllers/subscriptionController.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
 import jwt from 'jsonwebtoken';
 
@@ -19,6 +19,7 @@ const optionalAuth = (req, res, next) => {
 };
 
 router.post('/', verifyToken, toggleSubscription);
+router.get('/user', verifyToken, getSubscribedChannels);
 router.get('/:channelId/status', optionalAuth, getSubscriptionStatus);
 
 export default router;

@@ -13,7 +13,15 @@ if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
 }
 
 
-app.use(cors());
+const corsOptions = {
+  origin: true, // Allow all origins dynamically
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Channel-Id'],
+  credentials: true
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
 app.use(express.json());
 import passport from './config/passport.js';
 app.use(passport.initialize());
@@ -28,6 +36,9 @@ import channelRoutes from './routes/channelRoutes.js';
 import historyRoutes from './routes/historyRoutes.js';
 import playlistRoutes from './routes/playlistRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
+import canvasRoutes from './routes/canvasRoutes.js';
+import reportRoutes from './routes/reportRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/videos', videoRoutes);
@@ -38,6 +49,9 @@ app.use('/api/channels', channelRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/playlists', playlistRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/canvas', canvasRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 db.query.users.findFirst().then(() => {
   app.listen(PORT, () => {

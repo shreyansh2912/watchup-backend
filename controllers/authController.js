@@ -29,17 +29,21 @@ export const register = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(password, salt);
 
-        const [newUser] = await db.insert(users).values({
-            username,
-            email,
-            passwordHash,
-        }).returning();
+        const newUser = await db.transaction(async (tx) => {
+            const [user] = await tx.insert(users).values({
+                username,
+                email,
+                passwordHash,
+            }).returning();
 
-        await db.insert(channels).values({
-            userId: newUser.id,
-            name: username, // Default channel name is username
-            handle: `@${username}`, // Default handle
-            description: `Welcome to ${username}'s channel`,
+            await tx.insert(channels).values({
+                userId: user.id,
+                name: username, // Default channel name is username
+                handle: `@${username}`, // Default handle
+                description: `Welcome to ${username}'s channel`,
+            });
+
+            return user;
         });
 
         const token = generateToken(newUser);
@@ -69,6 +73,9 @@ export const login = async (req, res) => {
         }
 
         // Check Password
+        if (!user.passwordHash) {
+            return errorResponse(res, 400, 'Invalid credentials');
+        }
         const isMatch = await bcrypt.compare(password, user.passwordHash);
         if (!isMatch) {
             return errorResponse(res, 400, 'Invalid credentials');

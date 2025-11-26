@@ -8,3 +8,6 @@ export * from './subscriptions.js';
 export * from './history.js';
 export * from './playlists.js';
 export * from './relations.js';
+export * from './canvasFiles.js';
+export * from './reports.js';
+export * from './notifications.js';

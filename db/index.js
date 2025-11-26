@@ -7,6 +7,7 @@ dotenv.config();
 
 const pool = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
+    client_encoding: 'utf8',
 });
 
 export const db = drizzle(pool, { schema });

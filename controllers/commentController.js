@@ -1,5 +1,5 @@
 import { db } from '../db/index.js';
-import { comments, users } from '../db/schema/index.js';
+import { comments, channels } from '../db/schema/index.js';
 import { eq, desc } from 'drizzle-orm';
 import { successResponse, errorResponse } from '../utils/responseHandler.js';
 
@@ -7,7 +7,11 @@ export const addComment = async (req, res) => {
     try {
         const { videoId } = req.params;
         const { content } = req.body;
-        const userId = req.user.id;
+
+        if (!req.channel) {
+            return errorResponse(res, 400, "Channel context required");
+        }
+        const channelId = req.channel.id;
 
         if (!content || content.trim() === '') {
             return errorResponse(res, 400, "Comment content is required");
@@ -15,19 +19,19 @@ export const addComment = async (req, res) => {
 
         const [newComment] = await db.insert(comments).values({
             content,
-            userId,
+            channelId,
             videoId: parseInt(videoId)
         }).returning();
 
-        // Fetch user details to return with the comment
-        const [user] = await db.select({
-            username: users.username,
-            avatar: users.avatar
-        }).from(users).where(eq(users.id, userId));
+        // Fetch channel details to return with the comment
+        const [channel] = await db.select({
+            username: channels.name, // Using channel name as username equivalent
+            avatar: channels.avatarUrl
+        }).from(channels).where(eq(channels.id, channelId));
 
         return successResponse(res, 201, "Comment added", {
             ...newComment,
-            user
+            user: channel // Frontend expects 'user' object for display
         });
 
     } catch (error) {
@@ -39,15 +43,21 @@ export const addComment = async (req, res) => {
 export const getComments = async (req, res) => {
     try {
         const { videoId } = req.params;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 30;
+        const offset = (page - 1) * limit;
 
         const videoComments = await db.query.comments.findMany({
             where: eq(comments.videoId, parseInt(videoId)),
             orderBy: [desc(comments.createdAt)],
+            limit: limit,
+            offset: offset,
             with: {
-                user: {
+                channel: {
                     columns: {
-                        username: true,
-                        avatar: true
+                        name: true,
+                        handle: true,
+                        avatarUrl: true
                     }
                 }
             }
@@ -64,7 +74,9 @@ export const getComments = async (req, res) => {
 export const deleteComment = async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = req.user.id;
+        if (!req.channel) {
+            return errorResponse(res, 400, "Channel context required");
+        }
 
         const [comment] = await db.select().from(comments).where(eq(comments.id, parseInt(id))).limit(1);
 
@@ -72,7 +84,7 @@ export const deleteComment = async (req, res) => {
             return errorResponse(res, 404, "Comment not found");
         }
 
-        if (comment.userId !== userId) {
+        if (comment.channelId !== req.channel.id) {
             return errorResponse(res, 403, "Not authorized to delete this comment");
         }
 

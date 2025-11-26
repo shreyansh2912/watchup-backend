@@ -6,7 +6,11 @@ import { successResponse, errorResponse } from '../utils/responseHandler.js';
 export const toggleSubscription = async (req, res) => {
     try {
         const { channelId } = req.body;
-        const userId = req.user.id;
+
+        if (!req.channel) {
+            return errorResponse(res, 400, "Channel context required");
+        }
+        const subscriberChannelId = req.channel.id;
 
         if (!channelId) {
             return errorResponse(res, 400, "Channel ID is required");
@@ -19,14 +23,14 @@ export const toggleSubscription = async (req, res) => {
         }
 
         // Prevent subscribing to own channel
-        if (channel.userId === userId) {
+        if (parseInt(channelId) === subscriberChannelId) {
             return errorResponse(res, 400, "Cannot subscribe to your own channel");
         }
 
         // Check if already subscribed
         const [existingSub] = await db.select().from(subscriptions).where(
             and(
-                eq(subscriptions.subscriberId, userId),
+                eq(subscriptions.subscriberChannelId, subscriberChannelId),
                 eq(subscriptions.channelId, parseInt(channelId))
             )
         ).limit(1);
@@ -35,7 +39,7 @@ export const toggleSubscription = async (req, res) => {
             // Unsubscribe
             await db.delete(subscriptions).where(
                 and(
-                    eq(subscriptions.subscriberId, userId),
+                    eq(subscriptions.subscriberChannelId, subscriberChannelId),
                     eq(subscriptions.channelId, parseInt(channelId))
                 )
             );
@@ -43,7 +47,7 @@ export const toggleSubscription = async (req, res) => {
         } else {
             // Subscribe
             await db.insert(subscriptions).values({
-                subscriberId: userId,
+                subscriberChannelId,
                 channelId: parseInt(channelId)
             });
             return successResponse(res, 201, "Subscribed successfully", { subscribed: true });
@@ -58,15 +62,15 @@ export const toggleSubscription = async (req, res) => {
 export const getSubscriptionStatus = async (req, res) => {
     try {
         const { channelId } = req.params;
-        const userId = req.user ? req.user.id : null;
+        const subscriberChannelId = req.channel ? req.channel.id : null;
 
-        if (!userId) {
+        if (!subscriberChannelId) {
             return successResponse(res, 200, "Subscription status", { subscribed: false });
         }
 
         const [existingSub] = await db.select().from(subscriptions).where(
             and(
-                eq(subscriptions.subscriberId, userId),
+                eq(subscriptions.subscriberChannelId, subscriberChannelId),
                 eq(subscriptions.channelId, parseInt(channelId))
             )
         ).limit(1);
@@ -75,6 +79,30 @@ export const getSubscriptionStatus = async (req, res) => {
 
     } catch (error) {
         console.error("Get Subscription Status Error:", error);
+        return errorResponse(res, 500, "Server Error", error.message);
+    }
+};
+
+export const getSubscribedChannels = async (req, res) => {
+    try {
+        if (!req.channel) {
+            return errorResponse(res, 400, "Channel context required");
+        }
+        const subscriberChannelId = req.channel.id;
+
+        const subscribedChannels = await db.select({
+            id: channels.id,
+            name: channels.name,
+            handle: channels.handle,
+            avatarUrl: channels.avatarUrl
+        })
+            .from(subscriptions)
+            .innerJoin(channels, eq(subscriptions.channelId, channels.id))
+            .where(eq(subscriptions.subscriberChannelId, subscriberChannelId));
+
+        return successResponse(res, 200, "Subscribed channels fetched", subscribedChannels);
+    } catch (error) {
+        console.error("Get Subscribed Channels Error:", error);
         return errorResponse(res, 500, "Server Error", error.message);
     }
 };

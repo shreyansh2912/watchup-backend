@@ -1,5 +1,6 @@
 import { db } from '../db/index.js';
-import { videos, channels } from '../db/schema/index.js';
+import { videos, subscriptions } from '../db/schema/index.js';
+import { notifications } from '../db/schema/notifications.js';
 import { eq, desc, ilike, or } from 'drizzle-orm';
 import { uploadOnCloudinary, deleteFromCloudinary } from '../utils/cloudinary.js';
 import { successResponse, errorResponse } from '../utils/responseHandler.js';
@@ -7,38 +8,77 @@ import { successResponse, errorResponse } from '../utils/responseHandler.js';
 export const uploadVideo = async (req, res) => {
     try {
         const { title, description } = req.body;
-        const userId = req.user.id; // From authMiddleware
+
+        if (!req.channel) {
+            return errorResponse(res, 400, "Channel context required");
+        }
+        const channel = req.channel;
 
         if (!req.files || !req.files.videoFile || !req.files.thumbnail) {
-            return errorResponse(res, 400, 'Video file and thumbnail are required');
-        }
-
-        // Get user's channel
-        const [channel] = await db.select().from(channels).where(eq(channels.userId, userId)).limit(1);
-        if (!channel) {
-            return errorResponse(res, 404, 'Channel not found for this user');
+            return errorResponse(res, 400, "Video and thumbnail are required");
         }
 
         const videoLocalPath = req.files.videoFile[0].path;
         const thumbnailLocalPath = req.files.thumbnail[0].path;
 
-        // Upload to Cloudinary
-        const videoUpload = await uploadOnCloudinary(videoLocalPath);
+        const videoUpload = await uploadOnCloudinary(videoLocalPath, true);
         const thumbnailUpload = await uploadOnCloudinary(thumbnailLocalPath);
 
         if (!videoUpload || !thumbnailUpload) {
             return errorResponse(res, 500, 'Error uploading files to Cloudinary');
         }
 
-        // Save to DB
-        const [newVideo] = await db.insert(videos).values({
-            title,
-            description,
-            url: videoUpload.secure_url,
-            thumbnailUrl: thumbnailUpload.secure_url,
-            channelId: channel.id,
-            duration: Math.round(videoUpload.duration || 0),
-        }).returning();
+        const sanitizeForDB = (str) => {
+            if (!str) return str;
+            return str.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
+        };
+
+        // Save to DB with Transaction
+        let newVideo;
+        try {
+            newVideo = await db.transaction(async (tx) => {
+                const [video] = await tx.insert(videos).values({
+                    title: sanitizeForDB(title),
+                    description: sanitizeForDB(description),
+                    url: videoUpload.secure_url,
+                    publicId: videoUpload.public_id,
+                    thumbnailUrl: thumbnailUpload.secure_url,
+                    channelId: channel.id,
+                    duration: Math.round(videoUpload.duration || 0),
+                }).returning();
+                return video;
+            });
+        } catch (dbError) {
+            if (videoUpload?.public_id) {
+                await deleteFromCloudinary(videoUpload.public_id, 'video');
+            }
+            if (thumbnailUpload?.public_id) {
+                await deleteFromCloudinary(thumbnailUpload.public_id, 'image');
+            }
+            throw dbError;
+        }
+
+        try {
+            const subscribers = await db.query.subscriptions.findMany({
+                where: eq(subscriptions.channelId, channel.id),
+                columns: {
+                    subscriberChannelId: true
+                }
+            });
+
+            if (subscribers.length > 0) {
+                const notificationValues = subscribers.map(sub => ({
+                    recipientChannelId: sub.subscriberChannelId,
+                    senderChannelId: channel.id,
+                    type: 'VIDEO_UPLOAD',
+                    videoId: newVideo.id,
+                }));
+
+                await db.insert(notifications).values(notificationValues);
+            }
+        } catch (notifError) {
+            console.error('Error creating notifications:', notifError);
+        }
 
         return successResponse(res, 201, 'Video uploaded successfully', newVideo);
     } catch (error) {
@@ -49,8 +89,14 @@ export const uploadVideo = async (req, res) => {
 
 export const getAllVideos = async (req, res) => {
     try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 30;
+        const offset = (page - 1) * limit;
+
         const allVideos = await db.query.videos.findMany({
             orderBy: [desc(videos.createdAt)],
+            limit: limit,
+            offset: offset,
             with: {
                 channel: true, // Fetch channel details
             },
@@ -106,8 +152,11 @@ export const deleteVideo = async (req, res) => {
         }
 
         // Check ownership
-        if (video.channel.userId !== userId) {
-            return errorResponse(res, 403, "You are not authorized to delete this video");
+        // We require the user to be switched into the channel that owns the video
+        if (!req.channel || video.channelId !== req.channel.id) {
+            // Alternative: allow if req.user.id owns video.channel.userId
+            // But for strict channel mode:
+            return errorResponse(res, 403, "You are not authorized to delete this video (Wrong Channel Context)");
         }
 
         // Delete from Cloudinary (Extract public ID logic needed, skipping for now or assuming URL structure)

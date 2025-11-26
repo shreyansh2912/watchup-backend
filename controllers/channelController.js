@@ -4,18 +4,76 @@ import { eq, desc, sql } from 'drizzle-orm';
 import { successResponse, errorResponse } from '../utils/responseHandler.js';
 import { uploadOnCloudinary } from '../utils/cloudinary.js';
 
+export const createChannel = async (req, res) => {
+    try {
+        const { name, handle, description } = req.body;
+        const userId = req.user.id;
+
+        if (!name || !handle) {
+            return errorResponse(res, 400, "Name and handle are required");
+        }
+
+        // Check if handle is taken
+        const [existingChannel] = await db.select().from(channels).where(eq(channels.handle, handle)).limit(1);
+        if (existingChannel) {
+            return errorResponse(res, 400, "Handle is already taken");
+        }
+
+        let avatarUrl = req.user.avatar; // Default to user avatar
+        let bannerUrl = null;
+
+        if (req.files) {
+            if (req.files.avatar) {
+                const avatarUpload = await uploadOnCloudinary(req.files.avatar[0].path);
+                if (avatarUpload) avatarUrl = avatarUpload.secure_url;
+            }
+            if (req.files.banner) {
+                const bannerUpload = await uploadOnCloudinary(req.files.banner[0].path);
+                if (bannerUpload) bannerUrl = bannerUpload.secure_url;
+            }
+        }
+
+        const [newChannel] = await db.insert(channels).values({
+            userId,
+            name,
+            handle,
+            description,
+            avatarUrl,
+            bannerUrl
+        }).returning();
+
+        return successResponse(res, 201, "Channel created successfully", newChannel);
+
+    } catch (error) {
+        console.error("Create Channel Error:", error);
+        return errorResponse(res, 500, "Server Error", error.message);
+    }
+};
+
+export const getUserChannels = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const userChannels = await db.select().from(channels).where(eq(channels.userId, userId));
+        return successResponse(res, 200, "User channels fetched", userChannels);
+    } catch (error) {
+        console.error("Get User Channels Error:", error);
+        return errorResponse(res, 500, "Server Error", error.message);
+    }
+};
+
 export const getChannelById = async (req, res) => {
     try {
         const { id } = req.params;
-        const currentUserId = req.user ? req.user.id : null;
+        // We need to know which channel is viewing this to check subscription status
+        // This will come from the X-Channel-Id header processed by middleware
+        const viewerChannelId = req.channel ? req.channel.id : null;
 
         const channel = await db.query.channels.findFirst({
             where: eq(channels.id, parseInt(id)),
             with: {
                 user: {
                     columns: {
-                        username: true,
-                        email: true // Maybe hide email?
+                        username: true
                     }
                 }
             }
@@ -38,11 +96,11 @@ export const getChannelById = async (req, res) => {
             }
         });
 
-        // Check if current user is subscribed
+        // Check if viewer is subscribed
         let isSubscribed = false;
-        if (currentUserId) {
+        if (viewerChannelId) {
             const [sub] = await db.select().from(subscriptions).where(
-                sql`${subscriptions.subscriberId} = ${currentUserId} AND ${subscriptions.channelId} = ${channel.id}`
+                sql`${subscriptions.subscriberChannelId} = ${viewerChannelId} AND ${subscriptions.channelId} = ${channel.id}`
             ).limit(1);
             isSubscribed = !!sub;
         }
@@ -62,14 +120,19 @@ export const getChannelById = async (req, res) => {
 
 export const updateChannel = async (req, res) => {
     try {
+        const { id } = req.params;
         const userId = req.user.id;
         const { name, description, handle } = req.body;
 
-        // Find user's channel
-        const [channel] = await db.select().from(channels).where(eq(channels.userId, userId)).limit(1);
+        // Verify ownership
+        const [channel] = await db.select().from(channels).where(eq(channels.id, parseInt(id))).limit(1);
 
         if (!channel) {
             return errorResponse(res, 404, "Channel not found");
+        }
+
+        if (channel.userId !== userId) {
+            return errorResponse(res, 403, "You do not own this channel");
         }
 
         let avatarUrl = channel.avatarUrl;
@@ -105,23 +168,3 @@ export const updateChannel = async (req, res) => {
         return errorResponse(res, 500, "Server Error", error.message);
     }
 };
-
-export const getMyChannel = async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const [channel] = await db.select().from(channels).where(eq(channels.userId, userId)).limit(1);
-
-        if (!channel) {
-            return errorResponse(res, 404, "Channel not found");
-        }
-
-        // Redirect to getChannelById logic or just return basic info
-        // For simplicity, let's just reuse the ID and call the logic internally or redirect client
-        // But for API, let's just return the ID so client can fetch full details
-        return successResponse(res, 200, "My Channel ID", { id: channel.id });
-
-    } catch (error) {
-        console.error("Get My Channel Error:", error);
-        return errorResponse(res, 500, "Server Error", error.message);
-    }
-}

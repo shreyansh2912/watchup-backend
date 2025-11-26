@@ -6,6 +6,7 @@ export const videos = pgTable('videos', {
     title: text('title').notNull(),
     description: text('description'),
     url: text('url').notNull(),
+    publicId: text('public_id'),
     thumbnailUrl: text('thumbnail_url'),
     channelId: integer('channel_id').references(() => channels.id).notNull(),
     views: integer('views').default(0),
