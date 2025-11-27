@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, index } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, timestamp, integer, index, boolean } from 'drizzle-orm/pg-core';
 import { channels } from './channels.js';
 
 export const videos = pgTable('videos', {
@@ -11,6 +11,9 @@ export const videos = pgTable('videos', {
     channelId: integer('channel_id').references(() => channels.id).notNull(),
     views: integer('views').default(0),
     duration: integer('duration').default(0),
+    isShort: boolean('is_short').default(false),
+    visibility: text('visibility').default('public').notNull(), // public, private, members-only
+    slug: text('slug').unique(),
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),
     deletedAt: timestamp('deleted_at'),

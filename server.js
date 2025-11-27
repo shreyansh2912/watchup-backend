@@ -22,7 +22,11 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 import passport from './config/passport.js';
 app.use(passport.initialize());
 
@@ -39,6 +43,13 @@ import dashboardRoutes from './routes/dashboardRoutes.js';
 import canvasRoutes from './routes/canvasRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import shortsRoutes from './routes/shortsRoutes.js';
+import courseRoutes from './routes/courseRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
+import membershipRoutes from './routes/membershipRoutes.js';
+
+
+app.use('/api/shorts', shortsRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/videos', videoRoutes);
@@ -52,6 +63,10 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/canvas', canvasRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/shorts', shortsRoutes);
+app.use('/api/courses', courseRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/memberships', membershipRoutes);
 
 db.query.users.findFirst().then(() => {
   app.listen(PORT, () => {

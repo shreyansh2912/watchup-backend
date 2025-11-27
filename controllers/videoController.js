@@ -1,9 +1,22 @@
 import { db } from '../db/index.js';
-import { videos, subscriptions } from '../db/schema/index.js';
+import { videos } from '../db/schema/videos.js';
+import { subscriptions } from '../db/schema/subscriptions.js';
 import { notifications } from '../db/schema/notifications.js';
-import { eq, desc, ilike, or } from 'drizzle-orm';
+import { eq, desc, ilike, or, sql } from 'drizzle-orm';
 import { uploadOnCloudinary, deleteFromCloudinary } from '../utils/cloudinary.js';
 import { successResponse, errorResponse } from '../utils/responseHandler.js';
+
+const generateSlug = (channelName) => {
+    const randomStr = Math.random().toString(36).substring(2, 10);
+    const channelSlug = channelName
+        .toString()
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w\-]+/g, '')
+        .replace(/\-\-+/g, '-');
+    return `${randomStr}-${channelSlug}`;
+};
 
 export const uploadVideo = async (req, res) => {
     try {
@@ -33,6 +46,8 @@ export const uploadVideo = async (req, res) => {
             return str.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
         };
 
+        const slug = generateSlug(channel.name);
+
         // Save to DB with Transaction
         let newVideo;
         try {
@@ -45,6 +60,9 @@ export const uploadVideo = async (req, res) => {
                     thumbnailUrl: thumbnailUpload.secure_url,
                     channelId: channel.id,
                     duration: Math.round(videoUpload.duration || 0),
+                    isShort: (videoUpload.duration || 0) < 60,
+                    visibility: req.body.visibility || 'public',
+                    slug: slug,
                 }).returning();
                 return video;
             });
@@ -94,6 +112,7 @@ export const getAllVideos = async (req, res) => {
         const offset = (page - 1) * limit;
 
         const allVideos = await db.query.videos.findMany({
+            where: eq(videos.visibility, 'public'), // Only show public videos in general feed
             orderBy: [desc(videos.createdAt)],
             limit: limit,
             offset: offset,
@@ -112,21 +131,73 @@ export const getAllVideos = async (req, res) => {
 export const getVideoById = async (req, res) => {
     try {
         const { id } = req.params;
-        const video = await db.query.videos.findFirst({
-            where: eq(videos.id, parseInt(id)),
+
+        // Try to find by slug first
+        let video = await db.query.videos.findFirst({
+            where: eq(videos.slug, id),
             with: {
                 channel: true,
             },
         });
 
+        // Fallback to ID if not found and id is numeric
+        if (!video && !isNaN(id)) {
+            video = await db.query.videos.findFirst({
+                where: eq(videos.id, parseInt(id)),
+                with: {
+                    channel: true,
+                },
+            });
+        }
+
         if (!video) {
             return errorResponse(res, 404, 'Video not found');
         }
 
+        // Check Visibility
+        if (video.visibility === 'private') {
+            // Only owner can view
+            if (!req.channel || req.channel.id !== video.channelId) {
+                return errorResponse(res, 403, 'This video is private');
+            }
+        } else if (video.visibility === 'members-only') {
+            // Owner can always view
+            const isOwner = req.channel && req.channel.id === video.channelId;
+            if (!isOwner) {
+                // Check if user is a member
+                // We need userId from req.user (authenticated user)
+                if (!req.user) {
+                    return errorResponse(res, 401, 'Login required to view members-only content');
+                }
+
+                // Check active membership for this channel
+                const member = await db.query.channelMembers.findFirst({
+                    where: (members, { and, eq, gt }) => and(
+                        eq(members.userId, req.user.id),
+                        eq(members.status, 'active'),
+                        // We need to join with memberships to check channelId, or if we stored channelId in channelMembers (we didn't directly, but via membershipId)
+                        // Let's do a join or two-step lookup.
+                        // Actually, let's fetch membership details
+                    ),
+                    with: {
+                        membership: true
+                    }
+                });
+
+                // Filter for correct channel
+                const hasMembership = member && member.membership.channelId === video.channelId;
+
+                if (!hasMembership) {
+                    return errorResponse(res, 403, 'This video is for members only. Please join the channel to watch.');
+                }
+            }
+        }
+
         // Increment views (simple implementation)
+        // Note: Using ID for update is safer/easier since we have the video object now
         await db.update(videos)
             .set({ views: video.views + 1 })
-            .where(eq(videos.id, parseInt(id)));
+            .where(eq(videos.id, video.id));
 
         return successResponse(res, 200, 'Video fetched successfully', video);
     } catch (error) {
@@ -171,6 +242,26 @@ export const deleteVideo = async (req, res) => {
         return errorResponse(res, 500, "Server Error", error.message);
     }
 }
+
+export const getShortsFeed = async (req, res) => {
+    try {
+        // Fetch random shorts (or latest)
+        // Using random sort for "feed" feel
+        const shortsFeed = await db.query.videos.findMany({
+            where: eq(videos.isShort, true),
+            orderBy: sql`RANDOM()`,
+            limit: 10,
+            with: {
+                channel: true
+            }
+        });
+
+        return successResponse(res, 200, "Shorts feed fetched", shortsFeed);
+    } catch (error) {
+        console.error("Get Shorts Feed Error:", error);
+        return errorResponse(res, 500, "Server Error", error.message);
+    }
+};
 
 export const searchVideos = async (req, res) => {
     try {

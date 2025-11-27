@@ -9,9 +9,14 @@ import { playlists, playlistVideos } from './playlists.js';
 import { history } from './history.js';
 import { reports } from './reports.js';
 import { notifications } from './notifications.js';
+import { courses } from './courses.js';
+import { courseModules } from './course_modules.js';
+import { courseLessons } from './course_lessons.js';
+import { enrollments } from './enrollments.js';
 
 export const usersRelations = relations(users, ({ many }) => ({
     channels: many(channels),
+    enrollments: many(enrollments),
 }));
 
 export const channelsRelations = relations(channels, ({ one, many }) => ({
@@ -28,6 +33,7 @@ export const channelsRelations = relations(channels, ({ one, many }) => ({
     history: many(history),
     receivedNotifications: many(notifications, { relationName: 'receivedNotifications' }),
     sentNotifications: many(notifications, { relationName: 'sentNotifications' }),
+    courses: many(courses),
 }));
 
 export const videosRelations = relations(videos, ({ one, many }) => ({
@@ -131,4 +137,43 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
         fields: [notifications.videoId],
         references: [videos.id]
     })
+}));
+
+export const coursesRelations = relations(courses, ({ one, many }) => ({
+    channel: one(channels, {
+        fields: [courses.channelId],
+        references: [channels.id],
+    }),
+    modules: many(courseModules),
+    enrollments: many(enrollments),
+}));
+
+export const courseModulesRelations = relations(courseModules, ({ one, many }) => ({
+    course: one(courses, {
+        fields: [courseModules.courseId],
+        references: [courses.id],
+    }),
+    lessons: many(courseLessons),
+}));
+
+export const courseLessonsRelations = relations(courseLessons, ({ one }) => ({
+    module: one(courseModules, {
+        fields: [courseLessons.moduleId],
+        references: [courseModules.id],
+    }),
+    video: one(videos, {
+        fields: [courseLessons.videoId],
+        references: [videos.id],
+    }),
+}));
+
+export const enrollmentsRelations = relations(enrollments, ({ one }) => ({
+    user: one(users, {
+        fields: [enrollments.userId],
+        references: [users.id],
+    }),
+    course: one(courses, {
+        fields: [enrollments.courseId],
+        references: [courses.id],
+    }),
 }));

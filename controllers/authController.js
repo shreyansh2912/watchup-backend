@@ -54,6 +54,7 @@ export const register = async (req, res) => {
                 id: newUser.id,
                 username: newUser.username,
                 email: newUser.email,
+                hasPassword: !!newUser.passwordHash,
             },
         });
     } catch (error) {
@@ -89,10 +90,34 @@ export const login = async (req, res) => {
                 id: user.id,
                 username: user.username,
                 email: user.email,
+                hasPassword: !!user.passwordHash,
             },
         });
     } catch (error) {
         console.error('Login Error:', error);
         return errorResponse(res, 500, 'Server Error', error.message);
+    }
+};
+
+export const setPassword = async (req, res) => {
+    try {
+        const { password } = req.body;
+        const userId = req.user.id;
+
+        if (!password) {
+            return errorResponse(res, 400, "Password is required");
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(password, salt);
+
+        await db.update(users)
+            .set({ passwordHash })
+            .where(eq(users.id, userId));
+
+        return successResponse(res, 200, "Password set successfully");
+    } catch (error) {
+        console.error("Set Password Error:", error);
+        return errorResponse(res, 500, "Server Error", error.message);
     }
 };
