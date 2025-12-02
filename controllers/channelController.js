@@ -168,3 +168,73 @@ export const updateChannel = async (req, res) => {
         return errorResponse(res, 500, "Server Error", error.message);
     }
 };
+
+export const getChannelByUsername = async (req, res) => {
+    try {
+        const { username } = req.params;
+        // We need to know which channel is viewing this to check subscription status
+        const viewerChannelId = req.channel ? req.channel.id : null;
+
+        // Find user first to get ID
+        const user = await db.query.users.findFirst({
+            where: eq(users.username, username)
+        });
+
+        if (!user) {
+            return errorResponse(res, 404, "User not found");
+        }
+
+        // Find channel associated with user (assuming 1 channel per user for now or taking the first one)
+        const channel = await db.query.channels.findFirst({
+            where: eq(channels.userId, user.id),
+            with: {
+                user: {
+                    columns: {
+                        username: true,
+                        isLive: true,
+                        streamKey: true
+                    }
+                }
+            }
+        });
+
+        if (!channel) {
+            return errorResponse(res, 404, "Channel not found");
+        }
+
+        // Get subscriber count
+        const subCountResult = await db.select({ count: sql`count(*)` }).from(subscriptions).where(eq(subscriptions.channelId, channel.id));
+        const subscriberCount = parseInt(subCountResult[0].count);
+
+        // Get videos
+        const channelVideos = await db.query.videos.findMany({
+            where: eq(videos.channelId, channel.id),
+            orderBy: [desc(videos.createdAt)],
+            with: {
+                channel: true
+            }
+        });
+
+        // Check if viewer is subscribed
+        let isSubscribed = false;
+        if (viewerChannelId) {
+            const [sub] = await db.select().from(subscriptions).where(
+                sql`${subscriptions.subscriberChannelId} = ${viewerChannelId} AND ${subscriptions.channelId} = ${channel.id}`
+            ).limit(1);
+            isSubscribed = !!sub;
+        }
+
+        return successResponse(res, 200, "Channel fetched", {
+            ...channel,
+            subscriberCount,
+            isSubscribed,
+            videos: channelVideos,
+            isLive: user.isLive,
+            streamKey: user.isLive ? user.streamKey : null // Only return stream key if live
+        });
+
+    } catch (error) {
+        console.error("Get Channel By Username Error:", error);
+        return errorResponse(res, 500, "Server Error", error.message);
+    }
+};

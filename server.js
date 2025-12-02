@@ -47,6 +47,8 @@ import shortsRoutes from './routes/shortsRoutes.js';
 import courseRoutes from './routes/courseRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import membershipRoutes from './routes/membershipRoutes.js';
+import streamRoutes from './routes/streamRoutes.js';
+import mediaServer from './mediaServer.js';
 
 
 app.use('/api/shorts', shortsRoutes);
@@ -67,6 +69,9 @@ app.use('/api/shorts', shortsRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/memberships', membershipRoutes);
+app.use('/api/stream', streamRoutes);
+
+mediaServer.run();
 
 db.query.users.findFirst().then(() => {
   app.listen(PORT, () => {

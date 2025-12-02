@@ -8,6 +8,7 @@ export const courses = pgTable('courses', {
     description: text('description'),
     slug: text('slug').unique(),
     price: decimal('price', { precision: 10, scale: 2 }).default('0'),
+    visibility: text('visibility').default('public').notNull(), // public, members-only, paid
     thumbnailUrl: text('thumbnail_url'),
     isPublished: boolean('is_published').default(false),
     createdAt: timestamp('created_at').defaultNow(),
