@@ -45,7 +45,7 @@ import reportRoutes from './routes/reportRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import shortsRoutes from './routes/shortsRoutes.js';
 import courseRoutes from './routes/courseRoutes.js';
-import paymentRoutes from './routes/paymentRoutes.js';
+// import paymentRoutes from './routes/paymentRoutes.js'; // Payment Gateway Disabled
 import membershipRoutes from './routes/membershipRoutes.js';
 import streamRoutes from './routes/streamRoutes.js';
 import mediaServer from './mediaServer.js';
@@ -67,7 +67,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/shorts', shortsRoutes);
 app.use('/api/courses', courseRoutes);
-app.use('/api/payments', paymentRoutes);
+// app.use('/api/payments', paymentRoutes); // Payment Gateway Disabled
 app.use('/api/memberships', membershipRoutes);
 app.use('/api/stream', streamRoutes);
 
