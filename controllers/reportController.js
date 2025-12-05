@@ -5,7 +5,7 @@ import { successResponse, errorResponse } from '../utils/responseHandler.js';
 
 export const createReport = async (req, res) => {
     try {
-        const { videoId, reason } = req.body;
+        const { videoId, reason, category } = req.body;
 
         if (!req.channel) {
             return errorResponse(res, 400, "Channel context required");
@@ -20,6 +20,7 @@ export const createReport = async (req, res) => {
             reporterChannelId,
             videoId: parseInt(videoId),
             reason,
+            category: category || 'other',
         }).returning();
 
         return successResponse(res, 201, "Report submitted successfully", newReport);

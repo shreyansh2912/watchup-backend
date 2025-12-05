@@ -10,6 +10,7 @@ export const reports = pgTable('reports', {
     reporterChannelId: integer('reporter_channel_id').references(() => channels.id).notNull(),
     videoId: integer('video_id').references(() => videos.id).notNull(),
     reason: text('reason').notNull(),
+    category: text('category').default('other'),
     status: reportStatusEnum('status').default('pending'),
     createdAt: timestamp('created_at').defaultNow(),
 });
