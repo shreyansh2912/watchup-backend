@@ -4,6 +4,18 @@ import { users } from '../db/schema/users.js';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
 import { verifyToken } from '../middleware/authMiddleware.js';
+import { upload } from '../middleware/uploadMiddleware.js';
+import {
+    setupStream,
+    getCurrentStream,
+    getLiveStreams,
+    getStreamById,
+    updateStream,
+    endStream,
+    joinStream,
+    leaveStream,
+    uploadStreamThumbnail,
+} from '../controllers/streamController.js';
 
 const router = express.Router();
 
@@ -58,4 +70,18 @@ router.post('/key/reset', verifyToken, async (req, res) => {
     }
 });
 
+// Stream management endpoints
+router.post('/setup', verifyToken, setupStream);
+router.get('/current', verifyToken, getCurrentStream);
+router.get('/live', getLiveStreams); // Public endpoint
+router.get('/:id', getStreamById);
+router.put('/:id', verifyToken, updateStream);
+router.post('/:id/end', verifyToken, endStream);
+router.post('/:id/thumbnail', verifyToken, upload.single('thumbnail'), uploadStreamThumbnail);
+
+// Viewer tracking
+router.post('/:id/join', joinStream); // Can be called without auth for anonymous viewers
+router.post('/:id/leave', leaveStream);
+
 export default router;
+

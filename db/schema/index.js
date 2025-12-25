@@ -17,3 +17,4 @@ export * from './course_lessons.js';
 export * from './enrollments.js';
 export * from './memberships.js';
 export * from './channel_members.js';
+export * from './streams.js';

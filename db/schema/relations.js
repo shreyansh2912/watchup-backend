@@ -13,10 +13,12 @@ import { courses } from './courses.js';
 import { courseModules } from './course_modules.js';
 import { courseLessons } from './course_lessons.js';
 import { enrollments } from './enrollments.js';
+import { streams } from './streams.js';
 
 export const usersRelations = relations(users, ({ many }) => ({
     channels: many(channels),
     enrollments: many(enrollments),
+    streams: many(streams),
 }));
 
 export const channelsRelations = relations(channels, ({ one, many }) => ({
@@ -34,6 +36,7 @@ export const channelsRelations = relations(channels, ({ one, many }) => ({
     receivedNotifications: many(notifications, { relationName: 'receivedNotifications' }),
     sentNotifications: many(notifications, { relationName: 'sentNotifications' }),
     courses: many(courses),
+    streams: many(streams),
 }));
 
 export const videosRelations = relations(videos, ({ one, many }) => ({
@@ -177,3 +180,15 @@ export const enrollmentsRelations = relations(enrollments, ({ one }) => ({
         references: [courses.id],
     }),
 }));
+
+export const streamsRelations = relations(streams, ({ one }) => ({
+    user: one(users, {
+        fields: [streams.userId],
+        references: [users.id],
+    }),
+    channel: one(channels, {
+        fields: [streams.channelId],
+        references: [channels.id],
+    }),
+}));
+

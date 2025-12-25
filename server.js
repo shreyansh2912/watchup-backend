@@ -67,7 +67,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/shorts', shortsRoutes);
 app.use('/api/courses', courseRoutes);
-// app.use('/api/payments', paymentRoutes); // Payment Gateway Disabled
+// app.use('/api/payments', paymentRoutes);
 app.use('/api/memberships', membershipRoutes);
 app.use('/api/stream', streamRoutes);
 
